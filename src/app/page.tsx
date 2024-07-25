@@ -1,6 +1,46 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
+import { socket } from "./socket";
 
 export default function Page() {
+  const [isConnected, setIsConnected] = useState(false);
+  const [transport, setTransport] = useState("N/A");
+
+  useEffect(() => {
+    if (socket.connected) {
+      onConnect();
+    }
+
+    function onConnect() {
+      setIsConnected(true);
+      setTransport(socket.io.engine.transport.name);
+      socket.io.engine.on("upgrade", (transport) => {
+        setTransport(transport.name);
+      });
+    }
+
+    function onDisconnect() {
+      setIsConnected(false);
+      setTransport("N/A");
+    }
+
+    function onMessage(message: string) {
+      console.log(message);
+    }
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("message", onMessage);
+
+    return () => {
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("message", onMessage);
+    };
+  }, []);
+
   return (
     <div className="max-w-xl mx-auto p-6 sm:p-8 md:p-10">
       <div className="space-y-6">
