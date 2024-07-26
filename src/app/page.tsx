@@ -83,13 +83,18 @@ const GuessFeedback = ({ feedback, placeholderWord }: GuessFeedbackProps) => (
   </div>
 );
 
+interface Feedback {
+  guess: string;
+  socketId: string;
+}
+
 export default function Page() {
   const { register, handleSubmit, setValue } = useForm();
   const [isFocused, setIsFocused] = useState(false);
   const [guess, setGuess] = useState("");
   const [guessesRemaining, setGuessesRemaining] = useState(5);
   const [guessed, setGuessed] = useState(false);
-  const [feedbacks, setFeedbacks] = useState<string[]>([]);
+  const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [invalidGuess, setInvalidGuess] = useState(false);
   const socketId = useRef<string>();
 
@@ -106,18 +111,17 @@ export default function Page() {
   );
 
   const onSubmit = useCallback(() => {
+    socket.emit("guess", {
+      guess,
+      word: placeholderWord,
+      socketId: socketId.current,
+    });
+
     if (guess.length < 5) {
       setInvalidGuess(true);
       return;
     }
 
-    if (guess === placeholderWord) {
-      setGuessed(true);
-      setFeedbacks((prev) => [...prev, guess]);
-      return;
-    }
-
-    setFeedbacks((prev) => [...prev, guess]);
     setGuess("");
     setIsFocused(true);
     setGuessesRemaining((prev) => prev - 1);
@@ -130,6 +134,27 @@ export default function Page() {
 
     socket.on("connect", () => {
       socketId.current = socket.id;
+
+      socket.emit("join", { room: "game" });
+
+      socket.on("guessed", ({ guess, socketId }) => {
+        const feedback = {
+          guess,
+          socketId,
+        };
+        setFeedbacks((prev) => [...prev, feedback]);
+        if (socketId === socket.id) {
+          setGuessed(true);
+        }
+      });
+
+      socket.on("word-guess", ({ guess, socketId }) => {
+        const feedback = {
+          guess,
+          socketId,
+        };
+        setFeedbacks((prev) => [...prev, feedback]);
+      });
     });
 
     return () => {
@@ -162,7 +187,7 @@ export default function Page() {
               {feedbacks.map((feedback, index) => (
                 <GuessFeedback
                   key={index}
-                  feedback={feedback}
+                  feedback={feedback.guess}
                   placeholderWord={placeholderWord}
                 />
               ))}
@@ -203,7 +228,6 @@ export default function Page() {
               {guessesRemaining === 0 && !guessed && (
                 <div className="flex flex-col items-center justify-center text-red-800 font-bold">
                   <span>You ran out of guesses :&lt;</span>
-                  <span>The word was {placeholderWord}</span>
                 </div>
               )}
             </form>
