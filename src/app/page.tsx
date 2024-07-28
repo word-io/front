@@ -149,17 +149,22 @@ export default function Page() {
         setGuessed(true);
       });
 
-      socket.on("joined", ({ socketFeedbacks }) => {
+      socket.on("joined", (socketFeedbacks, socketGuessed) => {
         if (!socketId.current) return;
         const ownedFeedbacks = socketFeedbacks[socketId.current];
-        console.log("joined", ownedFeedbacks);
+
+        if (socketGuessed) {
+          setGuessed(true);
+          setGuessedMessage("Someone else guessed the word!");
+        }
+
         setFeedbacks(ownedFeedbacks || []);
       });
 
-      socket.on("word-guess", (socketFeedbacks, tries) => {
+      socket.on("word-guess", (socketFeedbacks) => {
         if (!socketId.current) return;
         const ownedFeedbacks = socketFeedbacks[socketId.current];
-        console.log("guess", socketId.current, ownedFeedbacks, socketFeedbacks);
+
         setFeedbacks(ownedFeedbacks || []);
       });
 
