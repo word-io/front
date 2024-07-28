@@ -11,6 +11,7 @@ import { GuessInput } from "@/components/custom/guess-input";
 import { ReadyModal } from "@/components/custom/ready-modal";
 import { Hint } from "@/components/custom/hint";
 import Confetti from "react-confetti";
+import { cn } from "@/lib/utils";
 
 interface Feedback {
   guess: string;
@@ -32,6 +33,7 @@ export default function Page() {
   const [showConfetti, setShowConfetti] = useState(false);
   const [word, setWord] = useState<string>("");
   const [hint, setHint] = useState<string>("");
+  const [triesCounter, setTriesCounter] = useState<Record<string, number>>({});
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -94,9 +96,13 @@ export default function Page() {
       setPlayersWaiting(socketRoomSize);
     };
 
-    const handleGuess = (socketFeedbacks: Record<string, Feedback[]>) => {
+    const handleGuess = (
+      socketFeedbacks: Record<string, Feedback[]>,
+      tries: Record<string, number>
+    ) => {
       if (!socket.id) return;
       const ownedFeedbacks = socketFeedbacks[socket.id];
+      setTriesCounter(tries);
       setFeedbacks(ownedFeedbacks || []);
     };
 
@@ -148,6 +154,35 @@ export default function Page() {
 
   return (
     <main className="flex flex-col items-center justify-center h-screen bg-background relative">
+      <section className="max-w-xs w-full absolute top-4 right-4 p-4 bg-input rounded z-10">
+        <span className="text-xl font-bold">Tentativas por jogador</span>
+        <div className="mt-2">
+          {Object.entries(triesCounter).map(([playerId, tries]) => (
+            <div
+              key={playerId}
+              className="flex items-center justify-between w-full"
+            >
+              <span
+                className={cn([
+                  "text-primary",
+                  playerId === socket.id && "font-semibold",
+                ])}
+              >
+                {playerId}
+              </span>
+              <span
+                className={cn([
+                  "text-muted-foreground",
+                  playerId === socket.id && "font-semibold",
+                ])}
+              >
+                {5 - tries}/5
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {isReadyModalOpen && (
         <ReadyModal
           playersWaiting={playersWaiting}
@@ -157,7 +192,7 @@ export default function Page() {
         />
       )}
 
-      {showConfetti && <Confetti />}
+      {showConfetti && <Confetti recycle={false} />}
 
       <div className="max-w-md w-full px-4 sm:px-6 lg:px-8">
         <div className="space-y-6">
