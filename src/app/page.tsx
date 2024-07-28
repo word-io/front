@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { GuessFeedback } from "@/components/custom/guess-feedback";
 import { GuessInput } from "@/components/custom/guess-input";
 import { cn } from "@/lib/utils";
+import { ReadyModal } from "@/components/custom/ready-modal";
 
 interface Feedback {
   guess: string;
@@ -27,6 +28,7 @@ export default function Page() {
   const [roomSize, setRoomSize] = useState(0);
   const [isReady, setIsReady] = useState(false);
   const [word, setWord] = useState<string>("");
+  const [hint, setHint] = useState<string>("");
   const socketId = useRef<string>();
 
   const handleChange = useCallback(
@@ -112,9 +114,13 @@ export default function Page() {
         setFeedbacks(ownedFeedbacks || []);
       });
 
-      socket.on("start", (socketWord) => {
+      socket.on("start", async (socketWord) => {
         setWord(socketWord);
         setIsReadyModalOpen(false);
+      });
+
+      socket.on("hint", (hint) => {
+        setHint(hint);
       });
 
       socket.on("ready", (socketPlayersReady) => {
@@ -122,6 +128,7 @@ export default function Page() {
       });
 
       socket.on("reseted", () => {
+        setHint("");
         setGuessed(false);
         setGuessesRemaining(5);
         setFeedbacks([]);
@@ -164,6 +171,15 @@ export default function Page() {
           </header>
 
           <div className="bg-card rounded-lg border p-6 space-y-6">
+            {hint && (
+              <div className="bg-muted rounded-lg p-4">
+                <h3 className="text-lg font-bold uppercase">Dica</h3>
+                <p className="text-primary">
+                  {hint || "Aguarde a definição..."}
+                </p>
+              </div>
+            )}
+
             <form
               className="relative flex flex-col gap-4"
               onSubmit={handleSubmit(onSubmit)}
@@ -220,42 +236,3 @@ export default function Page() {
     </main>
   );
 }
-
-interface ReadyModalProps {
-  playersWaiting?: number;
-  playersReady?: number;
-  isReady: boolean;
-  handleGetReady: () => void;
-}
-
-export const ReadyModal = ({
-  playersWaiting,
-  playersReady,
-  handleGetReady,
-  isReady,
-}: ReadyModalProps) => {
-  return (
-    <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 h-screen w-full flex items-center justify-center">
-      <div className="bg-card rounded-lg p-6 space-y-4">
-        <h1 className="text-4xl font-bold tracking-tight text-primary">
-          Está pronto para jogar?
-        </h1>
-
-        <p className="text-muted-foreground">
-          {playersReady}/{playersWaiting} - jogadores esperando para jogar
-        </p>
-        <Button
-          onClick={handleGetReady}
-          className={cn([
-            "w-full",
-            isReady
-              ? "bg-red-500 hover:bg-red-600"
-              : "bg-green-500 hover:bg-green-600",
-          ])}
-        >
-          {isReady ? "Cancelar" : "Estou pronto"}
-        </Button>
-      </div>
-    </div>
-  );
-};
