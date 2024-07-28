@@ -1,3 +1,5 @@
+// pages/Page.js
+
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -8,6 +10,7 @@ import { GuessFeedback } from "@/components/custom/guess-feedback";
 import { GuessInput } from "@/components/custom/guess-input";
 import { ReadyModal } from "@/components/custom/ready-modal";
 import { Hint } from "@/components/custom/hint";
+import Confetti from "react-confetti";
 
 interface Feedback {
   guess: string;
@@ -26,6 +29,7 @@ export default function Page() {
   const [playersReady, setPlayersReady] = useState(0);
   const [playersWaiting, setPlayersWaiting] = useState(0);
   const [isReady, setIsReady] = useState(false);
+  const [showConfetti, setShowConfetti] = useState(false);
   const [word, setWord] = useState<string>("");
   const [hint, setHint] = useState<string>("");
 
@@ -66,6 +70,7 @@ export default function Page() {
     const handleGuessed = (playerId: string) => {
       if (playerId === socket.id) {
         setGuessedMessage("Você adivinhou! 🎉");
+        setShowConfetti(true);
       } else {
         setGuessedMessage(`Adivinharam a palavra antes de você! 😢`);
       }
@@ -151,6 +156,8 @@ export default function Page() {
           isReady={isReady}
         />
       )}
+
+      {showConfetti && <Confetti />}
 
       <div className="max-w-md w-full px-4 sm:px-6 lg:px-8">
         <div className="space-y-6">
