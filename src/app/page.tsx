@@ -24,6 +24,7 @@ export default function Page() {
   const [guessedMessage, setGuessedMessage] = useState<string>("");
   const [isReadyModalOpen, setIsReadyModalOpen] = useState(true);
   const [playersWaiting, setPlayersWaiting] = useState(0);
+  const [roomSize, setRoomSize] = useState(0);
   const [isReady, setIsReady] = useState(false);
   const [word, setWord] = useState<string>("");
   const socketId = useRef<string>();
@@ -74,26 +75,35 @@ export default function Page() {
       socket.on("guessed", (player) => {
         if (!socketId.current) return;
         if (player === socketId.current) {
-          setGuessedMessage("You guessed the word!");
+          setGuessedMessage("Você adivinhou! 🎉");
         } else {
-          setGuessedMessage(`${player} guessed the word!`);
+          setGuessedMessage(`Adivinharam a palavra antes de você! 😢`);
         }
 
         setGuessed(true);
       });
 
-      socket.on("joined", (socketFeedbacks, socketGuessed, roomSize) => {
-        if (!socketId.current) return;
-        const ownedFeedbacks = socketFeedbacks[socketId.current];
+      socket.on(
+        "joined",
+        (
+          socketFeedbacks,
+          socketGuessed,
+          socketPlayersReady,
+          socketRoomSize
+        ) => {
+          if (!socketId.current) return;
+          const ownedFeedbacks = socketFeedbacks[socketId.current];
 
-        if (socketGuessed) {
-          setGuessed(true);
-          setGuessedMessage("Someone else guessed the word!");
+          if (socketGuessed) {
+            setGuessed(true);
+            setGuessedMessage(`Adivinharam a palavra antes de você! 😢`);
+          }
+
+          setFeedbacks(ownedFeedbacks || []);
+          setPlayersWaiting(socketPlayersReady);
+          setRoomSize(socketRoomSize);
         }
-
-        setFeedbacks(ownedFeedbacks || []);
-        setPlayersWaiting(roomSize);
-      });
+      );
 
       socket.on("word-guess", (socketFeedbacks) => {
         if (!socketId.current) return;
@@ -135,7 +145,8 @@ export default function Page() {
     <main className="flex flex-col items-center justify-center h-screen bg-background relative">
       {isReadyModalOpen && (
         <ReadyModal
-          playersWaiting={playersWaiting}
+          playersWaiting={roomSize}
+          playersReady={playersWaiting}
           handleGetReady={handleGetReady}
           isReady={isReady}
         />
@@ -145,10 +156,10 @@ export default function Page() {
         <div className="space-y-6">
           <header className="text-center">
             <h1 className="text-4xl font-bold tracking-tight text-primary">
-              Guess the Word
+              AlphaBattle
             </h1>
             <p className="mt-3 text-base text-muted-foreground">
-              Guess the random word and learn its definition.
+              Seja o primeiro a adivinhar a palavra!
             </p>
           </header>
 
@@ -179,15 +190,8 @@ export default function Page() {
 
               {guessesRemaining > 0 && !guessed && (
                 <div className="flex items-center justify-between">
-                  <Button
-                    type="submit"
-                    className="disabled:cursor-not-allowed"
-                    disabled={guessesRemaining === 0 || guessed}
-                  >
-                    Submit Guess
-                  </Button>
                   <div className="text-muted-foreground">
-                    Guesses remaining:{" "}
+                    Tentativas restantes:{" "}
                     <span className="font-bold">{guessesRemaining}</span>
                   </div>
                 </div>
@@ -201,14 +205,14 @@ export default function Page() {
 
               {guessesRemaining === 0 && !guessed && (
                 <div className="flex flex-col items-center justify-center text-red-800 font-bold">
-                  <span>You ran out of guesses :&lt;</span>
+                  <span>Acabaram suas tentativas :&lt;</span>
                 </div>
               )}
             </form>
           </div>
           {guessed && (
             <Button className="w-full" onClick={() => socket.emit("reset")}>
-              Restart
+              Reiniciar
             </Button>
           )}
         </div>
@@ -219,12 +223,14 @@ export default function Page() {
 
 interface ReadyModalProps {
   playersWaiting?: number;
+  playersReady?: number;
   isReady: boolean;
   handleGetReady: () => void;
 }
 
 export const ReadyModal = ({
   playersWaiting,
+  playersReady,
   handleGetReady,
   isReady,
 }: ReadyModalProps) => {
@@ -232,11 +238,11 @@ export const ReadyModal = ({
     <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 h-screen w-full flex items-center justify-center">
       <div className="bg-card rounded-lg p-6 space-y-4">
         <h1 className="text-4xl font-bold tracking-tight text-primary">
-          Ready to Play?
+          Está pronto para jogar?
         </h1>
 
         <p className="text-muted-foreground">
-          {playersWaiting} players are waiting to play.
+          {playersReady}/{playersWaiting} - jogadores esperando para jogar
         </p>
         <Button
           onClick={handleGetReady}
@@ -247,7 +253,7 @@ export const ReadyModal = ({
               : "bg-green-500 hover:bg-green-600",
           ])}
         >
-          {isReady ? "Unready" : "Ready"}
+          {isReady ? "Cancelar" : "Estou pronto"}
         </Button>
       </div>
     </div>
