@@ -96,6 +96,7 @@ export default function Page() {
   const [guessed, setGuessed] = useState(false);
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [invalidGuess, setInvalidGuess] = useState(false);
+  const [guessedMessage, setGuessedMessage] = useState<string>("");
   const socketId = useRef<string>();
 
   const handleChange = useCallback(
@@ -111,16 +112,16 @@ export default function Page() {
   );
 
   const onSubmit = useCallback(() => {
+    if (guess.length < 5) {
+      setInvalidGuess(true);
+      return;
+    }
+
     socket.emit("guess", {
       guess,
       word: placeholderWord,
       socketId: socketId.current,
     });
-
-    if (guess.length < 5) {
-      setInvalidGuess(true);
-      return;
-    }
 
     setGuess("");
     setIsFocused(true);
@@ -130,35 +131,51 @@ export default function Page() {
   useEffect(() => {
     if (socket.connected) {
       socketId.current = socket.id;
+    } else {
+      socket.connect();
     }
 
     socket.on("connect", () => {
       socketId.current = socket.id;
 
-      socket.emit("join", { room: "game" });
-
-      socket.on("guessed", ({ guess, socketId }) => {
-        const feedback = {
-          guess,
-          socketId,
-        };
-        setFeedbacks((prev) => [...prev, feedback]);
-        if (socketId === socket.id) {
-          setGuessed(true);
+      socket.on("guessed", (player) => {
+        if (!socketId.current) return;
+        if (player === socketId.current) {
+          setGuessedMessage("You guessed the word!");
+        } else {
+          setGuessedMessage(`${player} guessed the word!`);
         }
+
+        setGuessed(true);
       });
 
-      socket.on("word-guess", ({ guess, socketId }) => {
-        const feedback = {
-          guess,
-          socketId,
-        };
-        setFeedbacks((prev) => [...prev, feedback]);
+      socket.on("joined", ({ socketFeedbacks }) => {
+        if (!socketId.current) return;
+        const ownedFeedbacks = socketFeedbacks[socketId.current];
+        console.log("joined", ownedFeedbacks);
+        setFeedbacks(ownedFeedbacks || []);
+      });
+
+      socket.on("word-guess", (socketFeedbacks, tries) => {
+        if (!socketId.current) return;
+        const ownedFeedbacks = socketFeedbacks[socketId.current];
+        console.log("guess", socketId.current, ownedFeedbacks, socketFeedbacks);
+        setFeedbacks(ownedFeedbacks || []);
+      });
+
+      socket.on("reseted", () => {
+        setGuessed(false);
+        setGuessesRemaining(5);
+        setFeedbacks([]);
+        setGuessedMessage("");
       });
     });
 
+    socket.emit("join");
+
     return () => {
       socket.off("connect");
+      socket.disconnect();
     };
   }, []);
 
@@ -167,7 +184,9 @@ export default function Page() {
   }, [guess, setValue]);
 
   return (
-    <main className="flex flex-col items-center justify-center h-screen bg-background">
+    <main className="flex flex-col items-center justify-center h-screen bg-background relative">
+      <span></span>
+
       <div className="max-w-md w-full px-4 sm:px-6 lg:px-8">
         <div className="space-y-6">
           <header className="text-center">
@@ -184,13 +203,14 @@ export default function Page() {
               className="relative flex flex-col gap-4"
               onSubmit={handleSubmit(onSubmit)}
             >
-              {feedbacks.map((feedback, index) => (
-                <GuessFeedback
-                  key={index}
-                  feedback={feedback.guess}
-                  placeholderWord={placeholderWord}
-                />
-              ))}
+              {feedbacks.length > 0 &&
+                feedbacks.map((feedback, index) => (
+                  <GuessFeedback
+                    key={index}
+                    feedback={feedback.guess}
+                    placeholderWord={placeholderWord}
+                  />
+                ))}
 
               {guessesRemaining > 0 && !guessed && (
                 <GuessInput
@@ -220,8 +240,8 @@ export default function Page() {
               )}
 
               {guessed && (
-                <div className="flex items-center justify-center text-emerald-800 font-bold">
-                  You guessed the word!
+                <div className="flex items-center justify-center text-center text-emerald-800 font-bold">
+                  {guessedMessage}
                 </div>
               )}
 
@@ -232,20 +252,11 @@ export default function Page() {
               )}
             </form>
           </div>
-          {guessesRemaining === 0 ||
-            (guessed && (
-              <Button
-                className="w-full"
-                onClick={() => {
-                  setGuessesRemaining(5);
-                  setGuessed(false);
-                  setFeedbacks([]);
-                  setGuess("");
-                }}
-              >
-                Restart
-              </Button>
-            ))}
+          {guessed && (
+            <Button className="w-full" onClick={() => socket.emit("reset")}>
+              Restart
+            </Button>
+          )}
         </div>
       </div>
     </main>
