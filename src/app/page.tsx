@@ -4,84 +4,9 @@ import { Button } from "@/components/ui/button";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { socket } from "./socket";
 import { useForm } from "react-hook-form";
+import { GuessFeedback } from "@/components/custom/guess-feedback";
+import { GuessInput } from "@/components/custom/guess-input";
 import { cn } from "@/lib/utils";
-
-const placeholderWord = "apple";
-
-interface GuessInputProps {
-  guess: string;
-  handleChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  isFocused: boolean;
-  setIsFocused: (isFocused: boolean) => void;
-  register: any;
-  shake?: boolean;
-}
-
-const GuessInput = ({
-  guess,
-  handleChange,
-  isFocused,
-  setIsFocused,
-  register,
-  shake,
-}: GuessInputProps) => (
-  <div className="relative flex gap-2 w-full cursor-text">
-    {Array.from({ length: 5 }).map((_, index) => (
-      <div
-        key={index}
-        className={cn([
-          "flex items-end pb-3 justify-center flex-1 h-16 bg-muted rounded-lg",
-          isFocused && "ring-1 ring-primary",
-          shake && "animate-shake-x ring-1 ring-destructive",
-        ])}
-      >
-        {guess[index] ? (
-          <span className="uppercase text-2xl font-bold">{guess[index]}</span>
-        ) : (
-          <span className="text-lg font-bold">__</span>
-        )}
-      </div>
-    ))}
-    <input
-      autoComplete="off"
-      id="guess"
-      {...register("guess", { onChange: handleChange, required: true })}
-      value={guess}
-      autoFocus
-      onFocus={() => setIsFocused(true)}
-      onBlur={() => setIsFocused(false)}
-      maxLength={5}
-      className="absolute w-full h-16 opacity-0"
-    />
-  </div>
-);
-
-interface GuessFeedbackProps {
-  feedback: string;
-  placeholderWord: string;
-}
-
-const GuessFeedback = ({ feedback, placeholderWord }: GuessFeedbackProps) => (
-  <div className="flex gap-2 w-full">
-    {Array.from({ length: 5 }).map((_, index) => (
-      <div
-        key={index}
-        className={cn([
-          "flex items-end pb-3 justify-center flex-1 h-16 bg-zinc-400 rounded-lg disabled",
-          feedback[index] === placeholderWord[index] && "bg-emerald-800",
-        ])}
-      >
-        {feedback[index] ? (
-          <span className="uppercase text-2xl font-bold text-muted">
-            {feedback[index]}
-          </span>
-        ) : (
-          <span className="text-lg font-bold">__</span>
-        )}
-      </div>
-    ))}
-  </div>
-);
 
 interface Feedback {
   guess: string;
@@ -97,6 +22,10 @@ export default function Page() {
   const [feedbacks, setFeedbacks] = useState<Feedback[]>([]);
   const [invalidGuess, setInvalidGuess] = useState(false);
   const [guessedMessage, setGuessedMessage] = useState<string>("");
+  const [isReadyModalOpen, setIsReadyModalOpen] = useState(true);
+  const [playersWaiting, setPlayersWaiting] = useState(0);
+  const [isReady, setIsReady] = useState(false);
+  const [word, setWord] = useState<string>("");
   const socketId = useRef<string>();
 
   const handleChange = useCallback(
@@ -111,6 +40,11 @@ export default function Page() {
     [setValue]
   );
 
+  const handleGetReady = useCallback(() => {
+    setIsReady((prev) => !prev);
+    socket.emit("ready", socket.id);
+  }, []);
+
   const onSubmit = useCallback(() => {
     if (guess.length < 5) {
       setInvalidGuess(true);
@@ -119,7 +53,6 @@ export default function Page() {
 
     socket.emit("guess", {
       guess,
-      word: placeholderWord,
       socketId: socketId.current,
     });
 
@@ -149,7 +82,7 @@ export default function Page() {
         setGuessed(true);
       });
 
-      socket.on("joined", (socketFeedbacks, socketGuessed) => {
+      socket.on("joined", (socketFeedbacks, socketGuessed, roomSize) => {
         if (!socketId.current) return;
         const ownedFeedbacks = socketFeedbacks[socketId.current];
 
@@ -159,6 +92,7 @@ export default function Page() {
         }
 
         setFeedbacks(ownedFeedbacks || []);
+        setPlayersWaiting(roomSize);
       });
 
       socket.on("word-guess", (socketFeedbacks) => {
@@ -168,15 +102,24 @@ export default function Page() {
         setFeedbacks(ownedFeedbacks || []);
       });
 
+      socket.on("start", (socketWord) => {
+        setWord(socketWord);
+        setIsReadyModalOpen(false);
+      });
+
+      socket.on("ready", (socketPlayersReady) => {
+        setPlayersWaiting(socketPlayersReady);
+      });
+
       socket.on("reseted", () => {
         setGuessed(false);
         setGuessesRemaining(5);
         setFeedbacks([]);
         setGuessedMessage("");
       });
-    });
 
-    socket.emit("join");
+      socket.emit("join");
+    });
 
     return () => {
       socket.off("connect");
@@ -190,7 +133,13 @@ export default function Page() {
 
   return (
     <main className="flex flex-col items-center justify-center h-screen bg-background relative">
-      <span></span>
+      {isReadyModalOpen && (
+        <ReadyModal
+          playersWaiting={playersWaiting}
+          handleGetReady={handleGetReady}
+          isReady={isReady}
+        />
+      )}
 
       <div className="max-w-md w-full px-4 sm:px-6 lg:px-8">
         <div className="space-y-6">
@@ -213,7 +162,7 @@ export default function Page() {
                   <GuessFeedback
                     key={index}
                     feedback={feedback.guess}
-                    placeholderWord={placeholderWord}
+                    placeholderWord={word}
                   />
                 ))}
 
@@ -267,3 +216,40 @@ export default function Page() {
     </main>
   );
 }
+
+interface ReadyModalProps {
+  playersWaiting?: number;
+  isReady: boolean;
+  handleGetReady: () => void;
+}
+
+export const ReadyModal = ({
+  playersWaiting,
+  handleGetReady,
+  isReady,
+}: ReadyModalProps) => {
+  return (
+    <div className="fixed inset-0 bg-black/85 backdrop-blur-sm z-50 h-screen w-full flex items-center justify-center">
+      <div className="bg-card rounded-lg p-6 space-y-4">
+        <h1 className="text-4xl font-bold tracking-tight text-primary">
+          Ready to Play?
+        </h1>
+
+        <p className="text-muted-foreground">
+          {playersWaiting} players are waiting to play.
+        </p>
+        <Button
+          onClick={handleGetReady}
+          className={cn([
+            "w-full",
+            isReady
+              ? "bg-red-500 hover:bg-red-600"
+              : "bg-green-500 hover:bg-green-600",
+          ])}
+        >
+          {isReady ? "Unready" : "Ready"}
+        </Button>
+      </div>
+    </div>
+  );
+};
