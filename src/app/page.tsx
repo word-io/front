@@ -12,6 +12,7 @@ import { ReadyModal } from "@/components/custom/ready-modal";
 import { Hint } from "@/components/custom/hint";
 import Confetti from "react-confetti";
 import { cn } from "@/lib/utils";
+import { Scoreboard } from "@/components/custom/scoreboard";
 
 interface Feedback {
   guess: string;
@@ -34,7 +35,7 @@ export default function Page() {
   const [word, setWord] = useState<string>("");
   const [hint, setHint] = useState<string>("");
   const [triesCounter, setTriesCounter] = useState<Record<string, number>>({});
-
+  const [isGuessed, setIsGuessed] = useState(false);
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const value = e.target.value;
@@ -72,6 +73,7 @@ export default function Page() {
     const handleGuessed = (playerId: string) => {
       if (playerId === socket.id) {
         setGuessedMessage("Você adivinhou! 🎉");
+        setIsGuessed(true);
         setShowConfetti(true);
       } else {
         setGuessedMessage(`Adivinharam a palavra antes de você! 😢`);
@@ -154,34 +156,14 @@ export default function Page() {
 
   return (
     <main className="flex flex-col items-center justify-center h-screen bg-background relative">
-      <section className="max-w-xs w-full absolute top-4 right-4 p-4 bg-input rounded z-10">
-        <span className="text-xl font-bold">Tentativas por jogador</span>
-        <div className="mt-2">
-          {Object.entries(triesCounter).map(([playerId, tries]) => (
-            <div
-              key={playerId}
-              className="flex items-center justify-between w-full"
-            >
-              <span
-                className={cn([
-                  "text-primary",
-                  playerId === socket.id && "font-semibold",
-                ])}
-              >
-                {playerId}
-              </span>
-              <span
-                className={cn([
-                  "text-muted-foreground",
-                  playerId === socket.id && "font-semibold",
-                ])}
-              >
-                {5 - tries}/5
-              </span>
-            </div>
-          ))}
-        </div>
-      </section>
+      {Object.entries(triesCounter).map(([playerId, tries]) => (
+        <Scoreboard
+          tries={triesCounter}
+          currentAttemptIndex={tries - 1}
+          isCorrect={isGuessed}
+          key={playerId}
+        />
+      ))}
 
       {isReadyModalOpen && (
         <ReadyModal
